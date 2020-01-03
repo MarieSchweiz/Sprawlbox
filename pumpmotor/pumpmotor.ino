@@ -1,6 +1,6 @@
 /*
  * Starts a motor every 8 hours for 5 minutes.
- * 
+ *
  * Also actives the build-in LED when the motor is active
  * for easier testing and debugging
  */
@@ -41,7 +41,7 @@ unsigned long referenceTimeMillis;
 void setup() {
   // initialize serial communication at 9600 bits per second
   Serial.begin(9600);
-  
+
   // initialize digital pins LED_BUILTIN and MOTOR_PIN as an output
   pinMode(LED_BUILTIN, OUTPUT);
   pinMode(MOTOR_PIN, OUTPUT);
@@ -71,7 +71,7 @@ void loop() {
       millisSinceLastPumpStart,
       millisSinceLastPumpStart / MINUTE);
   Serial.println(debugInfo);
-  
+
   if (millisSinceLastPumpStart < PUMP_DURATION) {
     // If we are at the start of an 8 hour period start a pump sequence.
     pumpSequence();
@@ -93,7 +93,7 @@ void pumpSequence() {
   digitalWrite(LED_BUILTIN, HIGH);
   digitalWrite(MOTOR_PIN, LOW);
   delay(PUMP_DURATION);
-  
+
   Serial.println("Stopping motor");
   digitalWrite(LED_BUILTIN, LOW);
   digitalWrite(MOTOR_PIN, HIGH);
