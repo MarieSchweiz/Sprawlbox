@@ -51,13 +51,14 @@ unsigned long pumpRefMillis;
 bool lightActive;
 bool pumpActive;
 
-bool pumpOverrideActive = false;
+bool pumpOverrideActive;
+/** true if the override switched the pump on. false if the override switched it off. */
+bool pumpOverrideMode;
+unsigned long pumpOverrideRefMillis;
 
 /*
    TODO:
    finish comments
-   pump override button
-   better debug output
    prod debug option
 */
 
@@ -88,6 +89,7 @@ void setup() {
 }
 
 void initState(unsigned long nowMillis) {
+  pumpOverrideActive = false;
   setLightOff(nowMillis);
   setPumpOn(nowMillis);
 }
@@ -100,20 +102,6 @@ void loop() {
   unsigned long lightPassedTimeMillis = light(nowMillis);
   unsigned long pumpPassedTimeMillis = pump(nowMillis);
 
-  if (DEBUG) {
-    char debugInfo[100];
-    sprintf(
-      debugInfo,
-      "pump: %s %lu ms %lu m, light: %s %lu ms %lu m",
-      pumpActive ? "ON" : "OFF",
-      pumpPassedTimeMillis,
-      pumpPassedTimeMillis / MINUTE,
-      lightActive ? "ON" : "OFF",
-      lightPassedTimeMillis,
-      lightPassedTimeMillis / MINUTE);
-    Serial.println(debugInfo);
-  }
-
   int timeButtonState = digitalRead(BUTTON_TIME_PIN);
   if (timeButtonState == LOW) {
     Serial.print("Resetting refTimes to ");
@@ -121,6 +109,34 @@ void loop() {
     initState(nowMillis);
   }
 
+  int pumpButtonState = digitalRead(BUTTON_PUMP_PIN);
+  if (pumpButtonState == LOW) {
+    pumpOverride(nowMillis);
+  }
+
+  if (pumpOverrideActive && pumpOverrideMode) {
+    unsigned long passedTimeMillis = nowMillis - pumpOverrideRefMillis;
+    if (passedTimeMillis > PUMP_DURATION) {
+      Serial.println("Pump override OFF (expired)");
+      directPumpAccess(false);
+      pumpOverrideActive = false;
+    }
+  }
+
+  if (DEBUG) {
+    char debugInfo[100];
+    sprintf(
+      debugInfo,
+      "pump: %s%s %lu ms %lu m, light: %s %lu ms %lu m",
+      pumpActive ? "ON" : "OFF",
+      pumpOverrideActive ? (pumpOverrideMode ? "(*ON*)" : "(*OFF*)") : "",
+      pumpPassedTimeMillis,
+      pumpPassedTimeMillis / MINUTE,
+      lightActive ? "ON" : "OFF",
+      lightPassedTimeMillis,
+      lightPassedTimeMillis / MINUTE);
+    Serial.println(debugInfo);
+  }
 
   // Wait a short time until the next loop is run.
   // This is mostly to limit the amount of debug out which is generated.
@@ -175,16 +191,58 @@ unsigned long pump(unsigned long nowMillis) {
 }
 
 void setPumpOff() {
-  Serial.println("Pump OFF");
-  digitalWrite(LED_BUILTIN, LOW);
-  digitalWrite(PUMP_PIN, RELAY_OFF);
+  directPumpAccess(false);
   pumpActive = false;
+
+  if (pumpOverrideActive) {
+    Serial.println("Pump override OFF (state change)");
+    pumpOverrideActive = false;
+  }
 }
 
 void setPumpOn(unsigned long nowMillis) {
-  Serial.println("Pump ON");
-  digitalWrite(LED_BUILTIN, HIGH);
-  digitalWrite(PUMP_PIN, RELAY_ON);
+  directPumpAccess(true);
   pumpActive = true;
   pumpRefMillis = nowMillis;
+
+  if (pumpOverrideActive) {
+    Serial.println("Pump override OFF (state change)");
+    pumpOverrideActive = false;
+  }
+}
+
+void pumpOverride(unsigned long nowMillis) {
+  if (pumpOverrideActive) {
+    Serial.println("Pump override OFF (button)");
+    pumpOverrideActive = false;
+    if (pumpOverrideMode) {
+      directPumpAccess(false);
+    } else {
+      directPumpAccess(true);
+    }
+  } else {
+    Serial.println("Pump override ON");
+    pumpOverrideActive = true;
+    pumpOverrideRefMillis = nowMillis;
+
+    if (pumpActive) {
+      directPumpAccess(false);
+      pumpOverrideMode = false;
+    } else {
+      directPumpAccess(true);
+      pumpOverrideMode = true;
+    }
+  }
+}
+
+void directPumpAccess(bool on) {
+  if (on) {
+    Serial.println("Pump ON");
+    digitalWrite(LED_BUILTIN, HIGH);
+    digitalWrite(PUMP_PIN, RELAY_ON);
+  } else {
+    Serial.println("Pump OFF");
+    digitalWrite(LED_BUILTIN, LOW);
+    digitalWrite(PUMP_PIN, RELAY_OFF);
+  }
 }
