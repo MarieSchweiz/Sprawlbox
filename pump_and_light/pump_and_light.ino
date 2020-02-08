@@ -54,7 +54,7 @@ bool pumpActive;
 bool pumpOverrideActive;
 /** true if the override switched the pump on. false if the override switched it off. */
 bool pumpOverrideMode;
-unsigned long pumpOverrideRefMillis;
+unsigned long pumpOverrideRefMillis = 0;
 
 /*
    TODO:
@@ -106,6 +106,12 @@ void loop() {
   if (timeButtonState == LOW) {
     Serial.print("Resetting refTimes to ");
     Serial.println(nowMillis);
+
+    // briefly set the light on to give feedback on the button press
+    setLightOn(nowMillis);
+    delay(3000);
+
+    // do the actual reset which also turns the light off
     initState(nowMillis);
   }
 
@@ -212,9 +218,20 @@ void setPumpOn(unsigned long nowMillis) {
 }
 
 void pumpOverride(unsigned long nowMillis) {
+  unsigned long passedTimeMillis = nowMillis - pumpOverrideRefMillis;
+  if (passedTimeMillis < 3000) {
+    Serial.print("Ignoring pump button press since the last one was only ");
+    Serial.print(passedTimeMillis);
+    Serial.println(" ms ago.");
+    return;
+  }
+  
+  pumpOverrideRefMillis = nowMillis;
+
   if (pumpOverrideActive) {
     Serial.println("Pump override OFF (button)");
     pumpOverrideActive = false;
+    
     if (pumpOverrideMode) {
       directPumpAccess(false);
     } else {
@@ -223,7 +240,6 @@ void pumpOverride(unsigned long nowMillis) {
   } else {
     Serial.println("Pump override ON");
     pumpOverrideActive = true;
-    pumpOverrideRefMillis = nowMillis;
 
     if (pumpActive) {
       directPumpAccess(false);
