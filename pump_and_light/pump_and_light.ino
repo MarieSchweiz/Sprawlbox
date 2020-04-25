@@ -8,6 +8,18 @@
    for easier testing and debugging
 */
 
+/** These are required for the display **/
+#include <SPI.h>
+//#include <Wire.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
+
+/** Declaration for an SSD1306 display connected to I2C (SDA, SCL pins) */
+#define SCREEN_WIDTH 128 // OLED display width, in pixels
+#define SCREEN_HEIGHT 32 // OLED display height, in pixels
+#define OLED_RESET     4 // Reset pin # (or -1 if sharing Arduino reset pin)
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+
 const bool DEBUG = true;
 
 /** The number of the pin which controls the pump motor. */
@@ -67,6 +79,13 @@ unsigned long pumpOverrideRefMillis = 0;
 void setup() {
   // initialize serial communication at 9600 bits per second
   Serial.begin(9600);
+  // SSD1306_SWITCHCAPVCC = generate display voltage from 3.3V internally
+  if(!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) { // Address 0x3C for 128x32
+    Serial.println(F("SSD1306 allocation failed"));
+    for(;;); // Don't proceed, loop forever
+  }
+  // Clear the buffer
+  display.clearDisplay();
 
   // initialize all relevant digital pins as output or input
   pinMode(LED_BUILTIN, OUTPUT);
@@ -144,6 +163,15 @@ void loop() {
     Serial.println(debugInfo);
   }
 
+  /** This will display information on the display */
+  unsigned long untilPumpMillis = pumpActive ?
+                  (PUMP_DURATION - pumpPassedTimeMillis) :
+                  (TIME_BETWEEN_PUMP_STARTS - pumpPassedTimeMillis);
+  unsigned long untilLightMillis = lightActive ?
+                  (LIGHT_ON_DURATION - lightPassedTimeMillis) :
+                  (LIGHT_OFF_DURATION - lightPassedTimeMillis);
+  sprawlboxDisplay(lightActive, untilLightMillis, pumpActive, untilPumpMillis);
+  
   // Wait a short time until the next loop is run.
   // This is mostly to limit the amount of debug out which is generated.
   delay(DEBUG ? 1000 : 10);
@@ -261,4 +289,34 @@ void directPumpAccess(bool on) {
     digitalWrite(LED_BUILTIN, LOW);
     digitalWrite(PUMP_PIN, RELAY_OFF);
   }
+}
+
+void sprawlboxDisplay(bool lightState, unsigned long int lightMillis, bool waterState, unsigned long int waterMillis) {
+  display.clearDisplay();
+  display.setTextSize(1); // Draw 1X-scale text
+  display.setTextColor(SSD1306_WHITE);
+  display.setCursor(0, 0);
+  // print light lines
+  display.println(F("LIGHT: "));
+  lightState ? display.print(F("ON,  ")) : display.print(F("OFF, "));
+  printTime(lightMillis);
+
+  // print water lines
+  display.println(F("WATER: "));
+  waterState ? display.print(F("ON,  ")) : display.print(F("OFF, "));
+  printTime(waterMillis);
+  display.display();
+}
+
+void printTime(unsigned long displayMillis) {
+  // hours
+  display.print(displayMillis / HOUR);
+  display.print(F("h "));
+  // minutes
+  display.print(displayMillis / MINUTE  % 60);
+  display.print(F("min "));
+  // seconds
+  display.print(displayMillis / SECOND % 60);
+  display.print(F("s"));
+  display.println();
 }
